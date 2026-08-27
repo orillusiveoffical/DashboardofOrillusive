@@ -2,6 +2,7 @@
   "name": "orillusive-hotel-suite",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "description": "Orillusive Hotel Suite - Production-ready Hotel Management System SaaS",
   "workspaces": [
     "server",
