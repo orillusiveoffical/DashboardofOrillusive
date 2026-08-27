@@ -1,5 +1,5 @@
-import app from '../server/dist/app.js';
-import { connectSaasDb } from '../server/dist/db/saasDb.js';
+import app from '../server/src/app.js';
+import { connectSaasDb } from '../server/src/db/saasDb.js';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'OPTIONS') {
