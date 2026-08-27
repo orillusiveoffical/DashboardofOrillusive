@@ -70,9 +70,9 @@ const corsOptions: cors.CorsOptions = {
       (allowed) => allowed.toLowerCase() === cleanOrigin
     );
     if (isAllowed) {
-      return callback(null, origin);
+      return callback(null, true);
     }
-    return callback(new Error(`CORS rejected for origin: ${origin}`));
+    return callback(null, false);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
