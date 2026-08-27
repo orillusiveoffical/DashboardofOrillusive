@@ -5,9 +5,20 @@ import { config } from '../config/index.js';
 let io: SocketIOServer | null = null;
 
 export function initSocketManager(httpServer: HttpServer): SocketIOServer {
+  const socketAllowedOrigins = Array.from(
+    new Set(
+      [
+        config.clientUrl?.replace(/\/+$/, ''),
+        'https://dashboard.orillusive.com',
+        'http://localhost:5173',
+        'http://localhost:3000',
+      ].filter(Boolean) as string[]
+    )
+  );
+
   io = new SocketIOServer(httpServer, {
     cors: {
-      origin: config.clientUrl,
+      origin: socketAllowedOrigins,
       credentials: true,
     },
   });
