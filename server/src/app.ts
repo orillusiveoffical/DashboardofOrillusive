@@ -23,9 +23,27 @@ import settingsRoutes from './modules/settings/settings.routes.js';
 
 const app = express();
 
+const allowedOrigins = Array.from(
+  new Set(
+    [
+      config.clientUrl?.replace(/\/+$/, ''),
+      'https://dashboard.orillusive.com',
+      'http://localhost:5173',
+      'http://localhost:3000',
+    ].filter(Boolean) as string[]
+  )
+);
+
 app.use(
   cors({
-    origin: config.clientUrl,
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      const cleanOrigin = origin.replace(/\/+$/, '');
+      if (allowedOrigins.includes(cleanOrigin)) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
     credentials: true,
   })
 );

@@ -1,6 +1,22 @@
 import type { ApiResponse } from '@/types';
 
-const API_URL = (import.meta as any).env.VITE_API_URL || '/api';
+const getApiUrl = (): string => {
+  const envUrl = (import.meta as any).env?.VITE_API_URL;
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim() !== '') {
+    const cleanUrl = envUrl.trim().replace(/\/+$/, '');
+    return cleanUrl.endsWith('/api') ? cleanUrl : `${cleanUrl}/api`;
+  }
+  if (
+    typeof window !== 'undefined' &&
+    window.location.hostname !== 'localhost' &&
+    window.location.hostname !== '127.0.0.1'
+  ) {
+    return 'https://dashboardof-orillusive-server.vercel.app/api';
+  }
+  return '/api';
+};
+
+const API_URL = getApiUrl();
 
 class ApiError extends Error {
   constructor(
