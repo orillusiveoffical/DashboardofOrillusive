@@ -1,9 +1,13 @@
 import type { ApiResponse } from '@/types';
 
 const getApiUrl = (): string => {
-  const envUrl = (import.meta as any).env?.VITE_API_URL;
+  let envUrl = (import.meta as any).env?.VITE_API_URL;
   if (envUrl && typeof envUrl === 'string' && envUrl.trim() !== '') {
-    const cleanUrl = envUrl.trim().replace(/\/+$/, '');
+    let url = envUrl.trim();
+    if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('/')) {
+      url = `https://${url}`;
+    }
+    const cleanUrl = url.replace(/\/+$/, '');
     return cleanUrl.endsWith('/api') ? cleanUrl : `${cleanUrl}/api`;
   }
   if (

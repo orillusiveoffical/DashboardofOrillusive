@@ -59,22 +59,22 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
-app.use('/api/auth', authRoutes);
-app.use('/api/rooms', roomsRoutes);
-app.use('/api/bookings', bookingsRoutes);
-app.use('/api/guests', guestsRoutes);
-app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/calendar', calendarRoutes);
-app.use('/api/integrations', integrationsRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/public', publicRoutes);
-app.use('/api/housekeeping', housekeepingRoutes);
-app.use('/api/availability', availabilityRoutes);
-app.use('/api/reports', reportsRoutes);
-app.use('/api/staff', staffRoutes);
-app.use('/api/notifications', notificationsRoutes);
-app.use('/api/subscription', subscriptionRoutes);
-app.use('/api/settings', settingsRoutes);
+app.use(['/api/auth', '/auth'], authRoutes);
+app.use(['/api/rooms', '/rooms'], roomsRoutes);
+app.use(['/api/bookings', '/bookings'], bookingsRoutes);
+app.use(['/api/guests', '/guests'], guestsRoutes);
+app.use(['/api/dashboard', '/dashboard'], dashboardRoutes);
+app.use(['/api/calendar', '/calendar'], calendarRoutes);
+app.use(['/api/integrations', '/integrations'], integrationsRoutes);
+app.use(['/api/admin', '/admin'], adminRoutes);
+app.use(['/api/public', '/public'], publicRoutes);
+app.use(['/api/housekeeping', '/housekeeping'], housekeepingRoutes);
+app.use(['/api/availability', '/availability'], availabilityRoutes);
+app.use(['/api/reports', '/reports'], reportsRoutes);
+app.use(['/api/staff', '/staff'], staffRoutes);
+app.use(['/api/notifications', '/notifications'], notificationsRoutes);
+app.use(['/api/subscription', '/subscription'], subscriptionRoutes);
+app.use(['/api/settings', '/settings'], settingsRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

@@ -33,24 +33,34 @@ export interface SaasModels {
 
 let saasModels: SaasModels | null = null;
 
+function buildMongoUri(baseUri: string, dbName: string): string {
+  if (!baseUri) return '';
+  let query = '';
+  let uriWithoutQuery = baseUri.trim();
+
+  if (uriWithoutQuery.includes('?')) {
+    const qIndex = uriWithoutQuery.indexOf('?');
+    query = uriWithoutQuery.substring(qIndex + 1);
+    uriWithoutQuery = uriWithoutQuery.substring(0, qIndex);
+  }
+
+  uriWithoutQuery = uriWithoutQuery.replace(/\/+$/, '');
+
+  const schemeMatch = uriWithoutQuery.match(/^(mongodb(?:\+srv)?:\/\/[^\/]+)/i);
+  if (schemeMatch) {
+    const hostPart = schemeMatch[1];
+    return query ? `${hostPart}/${dbName}?${query}` : `${hostPart}/${dbName}`;
+  }
+
+  return query ? `${uriWithoutQuery}/${dbName}?${query}` : `${uriWithoutQuery}/${dbName}`;
+}
+
 export async function connectSaasDb(): Promise<{ connection: Connection; models: SaasModels }> {
   if (saasConnection && saasModels) {
     return { connection: saasConnection, models: saasModels };
   }
 
-  let baseUri = config.mongoDbUri;
-  if (!baseUri.endsWith('/')) {
-    baseUri += '/';
-  }
-
-  let saasDbUri: string;
-  if (baseUri.includes('?')) {
-    const [parts, query] = baseUri.split('?');
-    const cleanParts = parts.replace(/\/+$/, '');
-    saasDbUri = `${cleanParts}/${config.centralDbName}?${query}`;
-  } else {
-    saasDbUri = `${baseUri.replace(/\/+$/, '')}/${config.centralDbName}`;
-  }
+  const saasDbUri = buildMongoUri(config.mongoDbUri, config.centralDbName);
 
   console.log(`Connecting to Central SaaS Database: ${config.centralDbName}...`);
 

@@ -18,9 +18,23 @@ export function useNotificationSocket() {
   const [toasts, setToasts] = useState<ToastAlert[]>([]);
 
   useEffect(() => {
-    const socketUrl = (import.meta as any).env.VITE_API_URL
-      ? (import.meta as any).env.VITE_API_URL.replace(/\/api$/, '')
-      : window.location.origin;
+    let envApi = (import.meta as any).env?.VITE_API_URL;
+    let socketUrl: string;
+    if (envApi && typeof envApi === 'string' && envApi.trim() !== '') {
+      let url = envApi.trim();
+      if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('/')) {
+        url = `https://${url}`;
+      }
+      socketUrl = url.replace(/\/api\/?$/, '').replace(/\/+$/, '');
+    } else if (
+      typeof window !== 'undefined' &&
+      window.location.hostname !== 'localhost' &&
+      window.location.hostname !== '127.0.0.1'
+    ) {
+      socketUrl = 'https://dashboardof-orillusive-server.vercel.app';
+    } else {
+      socketUrl = window.location.origin;
+    }
 
     const newSocket = io(socketUrl, {
       transports: ['websocket', 'polling'],

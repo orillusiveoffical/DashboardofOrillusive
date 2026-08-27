@@ -38,25 +38,35 @@ export function getTenantDbName(tenantId: string): string {
   return `hms_tenant_${cleanId}`;
 }
 
+function buildMongoUri(baseUri: string, dbName: string): string {
+  if (!baseUri) return '';
+  let query = '';
+  let uriWithoutQuery = baseUri.trim();
+
+  if (uriWithoutQuery.includes('?')) {
+    const qIndex = uriWithoutQuery.indexOf('?');
+    query = uriWithoutQuery.substring(qIndex + 1);
+    uriWithoutQuery = uriWithoutQuery.substring(0, qIndex);
+  }
+
+  uriWithoutQuery = uriWithoutQuery.replace(/\/+$/, '');
+
+  const schemeMatch = uriWithoutQuery.match(/^(mongodb(?:\+srv)?:\/\/[^\/]+)/i);
+  if (schemeMatch) {
+    const hostPart = schemeMatch[1];
+    return query ? `${hostPart}/${dbName}?${query}` : `${hostPart}/${dbName}`;
+  }
+
+  return query ? `${uriWithoutQuery}/${dbName}?${query}` : `${uriWithoutQuery}/${dbName}`;
+}
+
 export async function getTenantDatabase(tenantId: string): Promise<{ connection: Connection; models: TenantModels }> {
   if (connectionCache.has(tenantId)) {
     return connectionCache.get(tenantId)!;
   }
 
   const dbName = getTenantDbName(tenantId);
-  let baseUri = config.mongoDbUri;
-  if (!baseUri.endsWith('/')) {
-    baseUri += '/';
-  }
-
-  let tenantUri: string;
-  if (baseUri.includes('?')) {
-    const [parts, query] = baseUri.split('?');
-    const cleanParts = parts.replace(/\/+$/, '');
-    tenantUri = `${cleanParts}/${dbName}?${query}`;
-  } else {
-    tenantUri = `${baseUri.replace(/\/+$/, '')}/${dbName}`;
-  }
+  const tenantUri = buildMongoUri(config.mongoDbUri, dbName);
 
   const connection = await mongoose.createConnection(tenantUri).asPromise();
 
