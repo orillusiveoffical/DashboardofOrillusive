@@ -1,0 +1,27 @@
+{
+  "name": "orillusive-hotel-suite",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Orillusive Hotel Suite - Production-ready Hotel Management System SaaS",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w server\" \"npm run dev -w client\"",
+    "build": "npm run build -w server && npm run build -w client",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:generate": "npm run db:generate -w server",
+    "db:push": "npm run db:push -w server",
+    "db:migrate": "npm run db:push -w server",
+    "db:seed": "npm run db:seed -w server",
+    "db:studio": "npm run db:studio -w server"
+  },
+  "devDependencies": {
+    "@esbuild/win32-x64": "^0.28.2",
+    "concurrently": "^9.1.2",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.12"
+  }
+}

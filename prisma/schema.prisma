@@ -1,0 +1,301 @@
+// Orillusive Hotel Suite - Database Schema (MongoDB)
+// Multi-tenant SaaS: each Hotel is a tenant with Users, Rooms, Bookings, etc.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  OWNER
+  MANAGER
+  STAFF
+}
+
+enum RoomStatus {
+  AVAILABLE
+  OCCUPIED
+  MAINTENANCE
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CHECKED_IN
+  CHECKED_OUT
+  CANCELLED
+  NO_SHOW
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  REFUNDED
+  FAILED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  BANK_TRANSFER
+  ONLINE
+  OTHER
+}
+
+enum BookingSource {
+  DIRECT
+  PHONE
+  WALK_IN
+  OTA
+}
+
+enum BlockReason {
+  MAINTENANCE
+  RENOVATION
+  OWNER_USE
+  OTHER
+}
+
+// ─── Core Models ─────────────────────────────────────────────────────────────
+
+model Hotel {
+  id          String   @id @map("_id") @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  address     String?
+  city        String?
+  country     String?
+  phone       String?
+  email       String?
+  timezone    String   @default("UTC")
+  currency    String   @default("USD")
+  logoUrl     String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users      User[]
+  roomTypes  RoomType[]
+  rooms      Room[]
+  guests     Guest[]
+  bookings   Booking[]
+  payments   Payment[]
+  roomBlocks RoomBlock[]
+  settings   HotelSettings?
+
+  @@map("hotels")
+}
+
+model HotelSettings {
+  id                    String   @id @map("_id") @default(cuid())
+  hotelId               String   @unique
+  checkInTime           String   @default("15:00")
+  checkOutTime          String   @default("11:00")
+  defaultTaxRate        Float    @default(0)
+  allowOnlineBooking    Boolean  @default(true)
+  cancellationPolicy    String?
+  bookingConfirmationMsg String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+
+  @@map("hotel_settings")
+}
+
+model User {
+  id           String    @id @map("_id") @default(cuid())
+  hotelId      String
+  email        String
+  passwordHash String
+  firstName    String
+  lastName     String
+  role         UserRole  @default(STAFF)
+  phone        String?
+  avatarUrl    String?
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  hotel             Hotel     @relation(fields: [hotelId], references: [id])
+  createdBookings   Booking[] @relation("CreatedByUser")
+  checkedInBookings Booking[] @relation("CheckedInByUser")
+
+  @@unique([hotelId, email])
+  @@index([hotelId])
+  @@map("users")
+}
+
+model RoomType {
+  id           String   @id @map("_id") @default(cuid())
+  hotelId      String
+  name         String
+  description  String?
+  basePrice    Float
+  maxOccupancy Int      @default(2)
+  amenities    String[] @default([])
+  imageUrl     String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  hotel Hotel  @relation(fields: [hotelId], references: [id])
+  rooms Room[]
+
+  @@unique([hotelId, name])
+  @@index([hotelId])
+  @@map("room_types")
+}
+
+model Room {
+  id         String     @id @map("_id") @default(cuid())
+  hotelId    String
+  roomTypeId String
+  number     String
+  floor      Int?
+  status     RoomStatus @default(AVAILABLE)
+  notes      String?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  hotel      Hotel       @relation(fields: [hotelId], references: [id])
+  roomType   RoomType    @relation(fields: [roomTypeId], references: [id])
+  images     RoomImage[]
+  bookings   Booking[]
+  roomBlocks RoomBlock[]
+
+  @@unique([hotelId, number])
+  @@index([hotelId, status])
+  @@index([roomTypeId])
+  @@map("rooms")
+}
+
+model RoomImage {
+  id        String   @id @map("_id") @default(cuid())
+  roomId    String
+  url       String
+  caption   String?
+  sortOrder Int      @default(0)
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  room Room @relation(fields: [roomId], references: [id])
+
+  @@index([roomId])
+  @@map("room_images")
+}
+
+model Guest {
+  id          String    @id @map("_id") @default(cuid())
+  hotelId     String
+  firstName   String
+  lastName    String
+  email       String?
+  phone       String?
+  address     String?
+  city        String?
+  country     String?
+  idType      String?
+  idNumber    String?
+  notes       String?
+  dateOfBirth DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  hotel    Hotel     @relation(fields: [hotelId], references: [id])
+  bookings Booking[]
+
+  @@index([hotelId])
+  @@index([hotelId, email])
+  @@map("guests")
+}
+
+model Booking {
+  id              String        @id @map("_id") @default(cuid())
+  hotelId         String
+  roomId          String
+  guestId         String
+  createdById     String?
+  checkedInById   String?
+  bookingNumber   String        @unique
+  checkIn         DateTime
+  checkOut        DateTime
+  adults          Int           @default(1)
+  children        Int           @default(0)
+  status          BookingStatus @default(PENDING)
+  source          BookingSource @default(DIRECT)
+  externalId      String?
+  externalSource  String?
+  totalAmount     Float
+  paidAmount      Float         @default(0)
+  specialRequests String?
+  internalNotes   String?
+  checkedInAt     DateTime?
+  checkedOutAt    DateTime?
+  cancelledAt     DateTime?
+  cancelReason    String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  hotel       Hotel     @relation(fields: [hotelId], references: [id])
+  room        Room      @relation(fields: [roomId], references: [id])
+  guest       Guest     @relation(fields: [guestId], references: [id])
+  createdBy   User?     @relation("CreatedByUser", fields: [createdById], references: [id])
+  checkedInBy User?     @relation("CheckedInByUser", fields: [checkedInById], references: [id])
+  payments    Payment[]
+
+  @@index([hotelId, status])
+  @@index([hotelId, checkIn, checkOut])
+  @@index([roomId, checkIn, checkOut])
+  @@index([guestId])
+  @@index([externalId, externalSource])
+  @@map("bookings")
+}
+
+model Payment {
+  id        String        @id @map("_id") @default(cuid())
+  hotelId   String
+  bookingId String
+  amount    Float
+  method    PaymentMethod @default(CASH)
+  status    PaymentStatus @default(PENDING)
+  reference String?
+  notes     String?
+  paidAt    DateTime?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  hotel   Hotel   @relation(fields: [hotelId], references: [id])
+  booking Booking @relation(fields: [bookingId], references: [id])
+
+  @@index([hotelId])
+  @@index([bookingId])
+  @@map("payments")
+}
+
+model RoomBlock {
+  id        String      @id @map("_id") @default(cuid())
+  hotelId   String
+  roomId    String
+  startDate DateTime
+  endDate   DateTime
+  reason    BlockReason @default(OTHER)
+  notes     String?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+  room  Room  @relation(fields: [roomId], references: [id])
+
+  @@index([hotelId, startDate, endDate])
+  @@index([roomId, startDate, endDate])
+  @@map("room_blocks")
+}
