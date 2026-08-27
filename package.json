@@ -19,7 +19,6 @@
     "db:studio": "npm run db:studio -w server"
   },
   "devDependencies": {
-    "@esbuild/win32-x64": "^0.28.2",
     "concurrently": "^9.1.2",
     "esbuild": "^0.28.2",
     "tsx": "^4.23.12"
