@@ -22,5 +22,18 @@
     "concurrently": "^9.1.2",
     "esbuild": "^0.28.2",
     "tsx": "^4.23.12"
+  },
+  "supportedArchitectures": {
+    "os": [
+      "current",
+      "linux",
+      "win32",
+      "darwin"
+    ],
+    "cpu": [
+      "current",
+      "x64",
+      "arm64"
+    ]
   }
 }
