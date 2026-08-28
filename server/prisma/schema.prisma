@@ -2,7 +2,8 @@
 // Multi-tenant SaaS: each Hotel is a tenant with Users, Rooms, Bookings, etc.
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-1.0.x", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
