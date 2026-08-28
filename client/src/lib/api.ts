@@ -15,7 +15,7 @@ const getApiUrl = (): string => {
     window.location.hostname !== 'localhost' &&
     window.location.hostname !== '127.0.0.1'
   ) {
-    return 'https://dashboardof-orillusive-server.vercel.app/api';
+    return 'https://server.dashboard.orillusive.com/api';
   }
   return '/api';
 };

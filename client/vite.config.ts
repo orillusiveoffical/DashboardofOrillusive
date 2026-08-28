@@ -21,7 +21,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'https://dashboardof-orillusive-server.vercel.app/api',
+        target: 'https://server.dashboard.orillusive.com/api',
         changeOrigin: true,
       },
     },

@@ -31,7 +31,7 @@ export function useNotificationSocket() {
       window.location.hostname !== 'localhost' &&
       window.location.hostname !== '127.0.0.1'
     ) {
-      socketUrl = 'https://dashboardof-orillusive-server.vercel.app';
+      socketUrl = 'https://server.dashboard.orillusive.com';
     } else {
       socketUrl = window.location.origin;
     }
