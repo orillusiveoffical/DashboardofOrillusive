@@ -21,4 +21,12 @@ export const config = {
   },
   clientUrl: process.env.CLIENT_URL || 'http://localhost:5173',
   isDev: (process.env.NODE_ENV || 'development') === 'development',
+  safepay: {
+    apiKey: process.env.SAFEPAY_API_KEY || process.env.SAFEPAY_PUBLIC_KEY || '',
+    secretKey: process.env.SAFEPAY_SECRET_KEY || process.env.SAFEPAY_V1_SECRET || '',
+    webhookSecret: process.env.SAFEPAY_WEBHOOK_SECRET || '',
+    environment: ((process.env.SAFEPAY_ENVIRONMENT || 'sandbox').toLowerCase() === 'production' ? 'production' : 'sandbox') as 'sandbox' | 'production',
+    baseUrl: process.env.SAFEPAY_BASE_URL || ((process.env.SAFEPAY_ENVIRONMENT || 'sandbox').toLowerCase() === 'production' ? 'https://api.getsafepay.com' : 'https://sandbox.api.getsafepay.com'),
+    checkoutUrl: process.env.SAFEPAY_CHECKOUT_URL || ((process.env.SAFEPAY_ENVIRONMENT || 'sandbox').toLowerCase() === 'production' ? 'https://getsafepay.com/components' : 'https://sandbox.api.getsafepay.com/components'),
+  },
 } as const;

@@ -57,7 +57,14 @@ const corsOptions: cors.CorsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '10mb' }));
+app.use(
+  express.json({
+    limit: '10mb',
+    verify: (req: any, _res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 app.use(express.urlencoded({ extended: true }));
 
 app.use(async (req, res, next) => {
@@ -103,7 +110,7 @@ app.use(['/api/availability', '/availability'], availabilityRoutes);
 app.use(['/api/reports', '/reports'], reportsRoutes);
 app.use(['/api/staff', '/staff'], staffRoutes);
 app.use(['/api/notifications', '/notifications'], notificationsRoutes);
-app.use(['/api/subscription', '/subscription'], subscriptionRoutes);
+app.use(['/api/subscription', '/subscription', '/api/payments', '/payments'], subscriptionRoutes);
 app.use(['/api/settings', '/settings'], settingsRoutes);
 
 app.use(notFoundHandler);

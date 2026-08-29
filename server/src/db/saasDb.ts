@@ -12,6 +12,8 @@ import {
   DemoHistorySchema,
   IPaymentOrder,
   PaymentOrderSchema,
+  IInvoice,
+  InvoiceSchema,
   ISubscription,
   SubscriptionSchema,
   IPlatformAuditLog,
@@ -27,6 +29,7 @@ export interface SaasModels {
   SaasUser: Model<ISaasUser>;
   DemoHistory: Model<IDemoHistory>;
   PaymentOrder: Model<IPaymentOrder>;
+  Invoice: Model<IInvoice>;
   Subscription: Model<ISubscription>;
   PlatformAuditLog: Model<IPlatformAuditLog>;
 }
@@ -72,6 +75,7 @@ export async function connectSaasDb(): Promise<{ connection: Connection; models:
     SaasUser: saasConnection.model<ISaasUser>('SaasUser', SaasUserSchema, 'users'),
     DemoHistory: saasConnection.model<IDemoHistory>('DemoHistory', DemoHistorySchema, 'demo_histories'),
     PaymentOrder: saasConnection.model<IPaymentOrder>('PaymentOrder', PaymentOrderSchema, 'payment_orders'),
+    Invoice: saasConnection.model<IInvoice>('Invoice', InvoiceSchema, 'invoices'),
     Subscription: saasConnection.model<ISubscription>('Subscription', SubscriptionSchema, 'subscriptions'),
     PlatformAuditLog: saasConnection.model<IPlatformAuditLog>(
       'PlatformAuditLog',

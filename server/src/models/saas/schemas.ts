@@ -160,9 +160,20 @@ export interface IPaymentOrder extends Document {
   selectedPlan: 'BASIC' | 'MEDIUM' | 'PREMIUM';
   amount: number;
   currency: string;
-  paymentStatus: 'PENDING' | 'PROCESSING' | 'VERIFIED' | 'FAILED' | 'EXPIRED' | 'CANCELLED';
+  paymentStatus:
+    | 'PENDING'
+    | 'PROCESSING'
+    | 'PAID'
+    | 'VERIFIED'
+    | 'FAILED'
+    | 'DECLINED'
+    | 'CANCELLED'
+    | 'REFUNDED'
+    | 'EXPIRED';
   provider: string;
   providerTransactionId?: string;
+  providerReference?: string;
+  invoiceId?: string;
   pendingRegistration?: Record<string, any>;
   verifiedAt?: Date;
   createdAt: Date;
@@ -182,13 +193,81 @@ const PaymentOrderSchema = new Schema<IPaymentOrder>(
     currency: { type: String, default: 'PKR' },
     paymentStatus: {
       type: String,
-      enum: ['PENDING', 'PROCESSING', 'VERIFIED', 'FAILED', 'EXPIRED', 'CANCELLED'],
+      enum: [
+        'PENDING',
+        'PROCESSING',
+        'PAID',
+        'VERIFIED',
+        'FAILED',
+        'DECLINED',
+        'CANCELLED',
+        'REFUNDED',
+        'EXPIRED',
+      ],
       default: 'PENDING',
     },
-    provider: { type: String, default: 'MOCK_PAYMENT_GATEWAY' },
-    providerTransactionId: String,
+    provider: { type: String, default: 'safepay' },
+    providerTransactionId: { type: String, index: true },
+    providerReference: { type: String, index: true },
+    invoiceId: { type: String, index: true },
     pendingRegistration: Schema.Types.Mixed,
     verifiedAt: Date,
+  },
+  { timestamps: true }
+);
+
+// ─── Invoice Schema ───────────────────────────────────────────────────────────
+export interface IInvoice extends Document {
+  invoiceId: string;
+  invoiceNumber: string;
+  orderId: string;
+  tenantId: string;
+  userId: string;
+  customerName: string;
+  customerEmail: string;
+  hotelName: string;
+  planId: string;
+  planName: string;
+  description: string;
+  amount: number;
+  taxAmount: number;
+  totalAmount: number;
+  currency: string;
+  status: 'PAID' | 'VOID' | 'REFUNDED';
+  paymentProvider: string;
+  providerTransactionId: string;
+  providerReference?: string;
+  periodStart: Date;
+  periodEnd: Date;
+  paidAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const InvoiceSchema = new Schema<IInvoice>(
+  {
+    invoiceId: { type: String, required: true, unique: true, index: true },
+    invoiceNumber: { type: String, required: true, unique: true, index: true },
+    orderId: { type: String, required: true, index: true },
+    tenantId: { type: String, required: true, index: true },
+    userId: { type: String, required: true, index: true },
+    customerName: { type: String, required: true },
+    customerEmail: { type: String, required: true },
+    hotelName: { type: String, required: true },
+    planId: { type: String, required: true },
+    planName: { type: String, required: true },
+    description: { type: String, required: true },
+    amount: { type: Number, required: true },
+    taxAmount: { type: Number, required: true },
+    totalAmount: { type: Number, required: true },
+    currency: { type: String, default: 'PKR' },
+    status: { type: String, enum: ['PAID', 'VOID', 'REFUNDED'], default: 'PAID' },
+    paymentProvider: { type: String, default: 'safepay' },
+    providerTransactionId: { type: String, required: true },
+    providerReference: String,
+    periodStart: { type: Date, required: true },
+    periodEnd: { type: Date, required: true },
+    paidAt: { type: Date, required: true },
   },
   { timestamps: true }
 );
@@ -260,6 +339,7 @@ export {
   SaasUserSchema,
   DemoHistorySchema,
   PaymentOrderSchema,
+  InvoiceSchema,
   SubscriptionSchema,
   PlatformAuditLogSchema,
 };

@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { CreditCard, CheckCircle2, Layers, Clock } from 'lucide-react';
-import { subscriptionService, PlanDetail } from '@/services/subscription.service';
+import { CreditCard, CheckCircle2, Layers, Clock, FileText, Printer, ShieldCheck } from 'lucide-react';
+import { subscriptionService, PlanDetail, Invoice } from '@/services/subscription.service';
 import { Modal } from '@/components/ui/Form';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
@@ -18,6 +18,7 @@ function SubscriptionBillingPage() {
   const [checkoutSession, setCheckoutSession] = useState<any | null>(null);
   const [paymentSuccess, setPaymentSuccess] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string>('');
+  const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null);
 
   // Payment Form State
   const [cardHolder, setCardHolder] = useState('Tariq Mahmood');
@@ -30,6 +31,11 @@ function SubscriptionBillingPage() {
     queryKey: ['subscription'],
     queryFn: subscriptionService.getSubscription,
     refetchInterval: 20000,
+  });
+
+  const { data: invoices = [] } = useQuery({
+    queryKey: ['invoices'],
+    queryFn: subscriptionService.getInvoices,
   });
 
   const sessionMutation = useMutation({
@@ -49,14 +55,36 @@ function SubscriptionBillingPage() {
       queryClient.invalidateQueries({ queryKey: ['subscription'] });
       queryClient.invalidateQueries({ queryKey: ['auth'] });
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
-      setPaymentSuccess(`🎉 Payment Verified! Subscribed to ${res.planName} (Txn: ${res.transactionId})`);
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      setPaymentSuccess(`🎉 Payment Verified! Subscribed to ${res.planName} (Order Ref: ${res.orderId || res.transactionId})`);
       setCheckoutSession(null);
       setSelectedPlanId(null);
     },
     onError: (err: any) => {
-      setPaymentError(err.message || 'Payment processing failed. Please verify card details.');
+      setPaymentError(err.message || 'Payment processing failed. Please verify payment status.');
     },
   });
+
+  // Handle Return Callback from Safepay (e.g. ?payment=success&orderId=...)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const paymentStatus = urlParams.get('payment');
+      const orderId = urlParams.get('orderId') || urlParams.get('order_id') || urlParams.get('beacon');
+      const trackerToken = urlParams.get('tracker') || urlParams.get('beacon');
+
+      if (paymentStatus === 'success' && (orderId || trackerToken)) {
+        verifyPaymentMutation.mutate({
+          orderId: orderId || undefined,
+          trackerToken: trackerToken || undefined,
+        });
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } else if (paymentStatus === 'cancelled') {
+        setPaymentError('Payment was cancelled on Safepay checkout.');
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }
+  }, []);
 
   const currentPlan = subData?.currentPlan;
   const otaUsage = subData?.otaUsage;
@@ -73,9 +101,18 @@ function SubscriptionBillingPage() {
     e.preventDefault();
     if (!checkoutSession) return;
     setPaymentError('');
+
+    // If Safepay checkout URL is generated, redirect to Safepay hosted portal or verify
+    if (checkoutSession.safepayCheckoutUrl && !checkoutSession.safepayCheckoutUrl.includes('track_')) {
+      window.location.href = checkoutSession.safepayCheckoutUrl;
+      return;
+    }
+
     verifyPaymentMutation.mutate({
       sessionId: checkoutSession.sessionId,
+      orderId: checkoutSession.orderId || checkoutSession.sessionId,
       planId: checkoutSession.planId,
+      trackerToken: checkoutSession.trackerToken,
       cardHolder,
       cardNumber,
       expMonth,
@@ -227,6 +264,59 @@ function SubscriptionBillingPage() {
               })}
             </div>
           </div>
+
+          {/* Invoices & Billing History Section */}
+          <div className="space-y-4 pt-4">
+            <h2 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
+              <FileText className="w-5 h-5 text-[#81A6C6]" /> Invoices & Billing History
+            </h2>
+
+            {invoices.length === 0 ? (
+              <div className="rounded-3xl border border-[var(--border)] bg-[var(--bg-card)] p-8 text-center text-xs text-[var(--text-muted)] font-medium">
+                No invoices generated yet. Invoices appear automatically after completed subscription payments.
+              </div>
+            ) : (
+              <div className="rounded-3xl border border-[var(--border)] bg-[var(--bg-card)] overflow-hidden shadow-xs">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-[var(--bg-surface)] text-[var(--text-muted)] font-bold uppercase tracking-wider border-b border-[var(--border)]">
+                      <tr>
+                        <th className="py-4 px-6">Invoice #</th>
+                        <th className="py-4 px-6">Date</th>
+                        <th className="py-4 px-6">Plan Description</th>
+                        <th className="py-4 px-6">Amount (PKR)</th>
+                        <th className="py-4 px-6">Status</th>
+                        <th className="py-4 px-6 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--border)] text-[var(--text-secondary)] font-medium">
+                      {invoices.map((inv: Invoice) => (
+                        <tr key={inv.invoiceId} className="hover:bg-[var(--bg-surface)]/50 transition">
+                          <td className="py-4 px-6 font-mono font-bold text-[var(--text-primary)]">{inv.invoiceNumber}</td>
+                          <td className="py-4 px-6">{new Date(inv.paidAt || inv.createdAt).toLocaleDateString()}</td>
+                          <td className="py-4 px-6 font-semibold text-[var(--text-primary)]">{inv.planName} SaaS Plan</td>
+                          <td className="py-4 px-6 font-extrabold text-[var(--text-primary)]">{(inv.totalAmount || inv.amount).toLocaleString()} PKR</td>
+                          <td className="py-4 px-6">
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
+                              <ShieldCheck className="w-3 h-3" /> PAID
+                            </span>
+                          </td>
+                          <td className="py-4 px-6 text-right">
+                            <button
+                              onClick={() => setViewingInvoice(inv)}
+                              className="px-3.5 py-1.5 rounded-lg bg-[#81A6C6]/15 hover:bg-[#81A6C6]/30 text-[#81A6C6] dark:text-[#AACDDC] font-bold text-xs transition"
+                            >
+                              View Tax Invoice
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
         </>
       ) : null}
 
@@ -243,7 +333,7 @@ function SubscriptionBillingPage() {
         >
           <div className="space-y-5 text-sm text-[var(--text-primary)]">
             <p className="text-xs text-[var(--text-muted)] font-medium">
-              Order Session: <span className="font-mono font-bold text-[#81A6C6]">{checkoutSession.sessionId}</span>
+              Order Session: <span className="font-mono font-bold text-[#81A6C6]">{checkoutSession.orderId || checkoutSession.sessionId}</span>
             </p>
 
             {/* Order Breakdown Box */}
@@ -334,7 +424,7 @@ function SubscriptionBillingPage() {
 
               <div className="flex items-center justify-between text-[10px] text-slate-500 font-medium pt-1">
                 <span>🔒 256-bit SSL Encrypted Payment Gateway</span>
-                <span>Powered by Stripe Sandbox</span>
+                <span>Powered by Safepay Payments (PKR)</span>
               </div>
 
               <div className="pt-3 flex gap-3">
@@ -359,6 +449,99 @@ function SubscriptionBillingPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </Modal>
+      )}
+
+      {/* Official Tax Invoice Viewer Modal */}
+      {viewingInvoice && (
+        <Modal
+          open={!!viewingInvoice}
+          onClose={() => setViewingInvoice(null)}
+          title="Official Tax Invoice & Receipt"
+          size="lg"
+        >
+          <div className="space-y-6 text-xs text-[var(--text-primary)]">
+            {/* Invoice Header */}
+            <div className="flex justify-between items-start border-b border-[var(--border)] pb-5">
+              <div>
+                <h2 className="text-2xl font-black tracking-tight text-[var(--text-primary)]">ORILLUSIVE</h2>
+                <p className="text-xs text-[var(--text-secondary)] font-semibold mt-0.5">Software Studio / SaaS Platform</p>
+                <p className="text-[11px] text-[var(--text-muted)] mt-1">support@orillusive.com</p>
+              </div>
+              <div className="text-right">
+                <span className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
+                  <ShieldCheck className="w-3.5 h-3.5" /> PAID
+                </span>
+                <p className="font-mono font-extrabold text-sm text-[var(--text-primary)] mt-2">{viewingInvoice.invoiceNumber}</p>
+                <p className="text-[11px] text-[var(--text-muted)]">Date: {new Date(viewingInvoice.paidAt || viewingInvoice.createdAt).toLocaleDateString()}</p>
+              </div>
+            </div>
+
+            {/* Bill To & Property Details */}
+            <div className="grid grid-cols-2 gap-4 rounded-2xl bg-[var(--bg-surface)] p-4 border border-[var(--border)]">
+              <div>
+                <div className="text-[10px] uppercase font-bold text-[var(--text-muted)]">Billed To</div>
+                <div className="font-bold text-sm text-[var(--text-primary)] mt-1">{viewingInvoice.hotelName}</div>
+                <div className="text-xs text-[var(--text-secondary)] mt-0.5">{viewingInvoice.customerName}</div>
+                <div className="text-xs text-[var(--text-muted)]">{viewingInvoice.customerEmail}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] uppercase font-bold text-[var(--text-muted)]">Payment Gateway</div>
+                <div className="font-semibold text-xs text-[var(--text-primary)] mt-1">Safepay Gateway (PKR)</div>
+                <div className="text-[10px] font-mono text-[var(--text-muted)] mt-1 break-all">Ref: {viewingInvoice.providerTransactionId}</div>
+              </div>
+            </div>
+
+            {/* Line Items Table */}
+            <div className="rounded-2xl border border-[var(--border)] overflow-hidden">
+              <table className="w-full text-left">
+                <thead className="bg-[var(--bg-surface)] text-[var(--text-muted)] font-bold uppercase text-[10px]">
+                  <tr>
+                    <th className="py-2.5 px-4">Item & Description</th>
+                    <th className="py-2.5 px-4 text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border)] font-medium">
+                  <tr>
+                    <td className="py-3 px-4">
+                      <div className="font-bold text-[var(--text-primary)]">{viewingInvoice.planName} SaaS Subscription</div>
+                      <div className="text-[11px] text-[var(--text-muted)]">1 Month PMS, OTA Channel Manager & Database License</div>
+                    </td>
+                    <td className="py-3 px-4 text-right font-bold text-[var(--text-primary)]">{viewingInvoice.amount.toLocaleString()} PKR</td>
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 px-4 text-[var(--text-muted)]">GST Sales Tax (16%)</td>
+                    <td className="py-2.5 px-4 text-right text-[var(--text-muted)]">{viewingInvoice.taxAmount.toLocaleString()} PKR</td>
+                  </tr>
+                  <tr className="bg-[var(--bg-surface)] font-extrabold text-sm text-[var(--text-primary)]">
+                    <td className="py-3 px-4">Total Amount Paid</td>
+                    <td className="py-3 px-4 text-right text-emerald-700 dark:text-emerald-400">{viewingInvoice.totalAmount.toLocaleString()} PKR</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex justify-between items-center pt-2">
+              <span className="text-[10px] text-[var(--text-muted)]">🔒 Verified Electronic Receipt</span>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-4 py-2 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--border)] border border-[var(--border)] font-bold text-xs flex items-center gap-1.5 transition"
+                >
+                  <Printer className="w-3.5 h-3.5" /> Print Receipt
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewingInvoice(null)}
+                  className="px-5 py-2 rounded-xl bg-[#81A6C6] hover:bg-[#6C93B5] text-white font-bold text-xs shadow-xs transition"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
           </div>
         </Modal>
       )}
