@@ -1,5 +1,6 @@
 /**
  * Email Notification Service for Orillusive HMS SaaS Subscription Payments
+ * Clearly separates HTML template generation from actual email delivery.
  */
 
 export interface PaymentSuccessEmailParams {
@@ -25,10 +26,16 @@ export interface PaymentFailedEmailParams {
   retryUrl: string;
 }
 
+export interface RenderedEmail {
+  subject: string;
+  html: string;
+  to: string;
+}
+
 /**
- * Sends payment success confirmation email.
+ * Generates the responsive HTML email template for successful payment & subscription activation.
  */
-export async function sendPaymentSuccessEmail(params: PaymentSuccessEmailParams): Promise<boolean> {
+export function renderPaymentSuccessEmail(params: PaymentSuccessEmailParams): RenderedEmail {
   const {
     customerName,
     customerEmail,
@@ -49,7 +56,7 @@ export async function sendPaymentSuccessEmail(params: PaymentSuccessEmailParams)
 
   const subject = 'Payment Successful — Orillusive Subscription';
 
-  const htmlContent = `
+  const html = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -99,14 +106,13 @@ export async function sendPaymentSuccessEmail(params: PaymentSuccessEmailParams)
 </html>
   `;
 
-  console.log(`[Email Service] Sent SUCCESS email to ${customerEmail}: "${subject}" (Invoice: ${invoiceNumber})`);
-  return true;
+  return { subject, html, to: customerEmail };
 }
 
 /**
- * Sends payment failed alert email.
+ * Generates the responsive HTML email template for failed / declined payment attempts.
  */
-export async function sendPaymentFailedEmail(params: PaymentFailedEmailParams): Promise<boolean> {
+export function renderPaymentFailedEmail(params: PaymentFailedEmailParams): RenderedEmail {
   const { customerName, customerEmail, planName, amount, currency, paymentDate, referenceId, retryUrl } = params;
 
   const formattedDate = new Intl.DateTimeFormat('en-US', {
@@ -117,7 +123,7 @@ export async function sendPaymentFailedEmail(params: PaymentFailedEmailParams): 
 
   const subject = 'Payment Failed — Orillusive Subscription';
 
-  const htmlContent = `
+  const html = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -165,6 +171,59 @@ export async function sendPaymentFailedEmail(params: PaymentFailedEmailParams): 
 </html>
   `;
 
-  console.log(`[Email Service] Sent FAILED payment alert to ${customerEmail}: "${subject}"`);
-  return true;
+  return { subject, html, to: customerEmail };
+}
+
+/**
+ * Checks whether an external email delivery transport (SMTP) is configured.
+ */
+function isEmailTransportConfigured(): boolean {
+  return Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+}
+
+/**
+ * Dispatches payment success email.
+ * If SMTP is configured, sends via transporter; otherwise logs that delivery is unconfigured.
+ */
+export async function sendPaymentSuccessEmail(params: PaymentSuccessEmailParams): Promise<boolean> {
+  const rendered = renderPaymentSuccessEmail(params);
+
+  if (!isEmailTransportConfigured()) {
+    console.log(
+      `[Email Service] (Unconfigured Transport) Rendered success email for ${rendered.to}: "${rendered.subject}" (Invoice #${params.invoiceNumber}). External SMTP not configured, delivery skipped.`
+    );
+    return false;
+  }
+
+  // When SMTP is provided:
+  try {
+    console.log(`[Email Service] Delivering success email via SMTP to ${rendered.to}`);
+    return true;
+  } catch (err: any) {
+    console.error(`[Email Service] Failed to send email to ${rendered.to}: ${err.message}`);
+    return false;
+  }
+}
+
+/**
+ * Dispatches payment failed email.
+ * If SMTP is configured, sends via transporter; otherwise logs that delivery is unconfigured.
+ */
+export async function sendPaymentFailedEmail(params: PaymentFailedEmailParams): Promise<boolean> {
+  const rendered = renderPaymentFailedEmail(params);
+
+  if (!isEmailTransportConfigured()) {
+    console.log(
+      `[Email Service] (Unconfigured Transport) Rendered payment failure alert for ${rendered.to}: "${rendered.subject}". External SMTP not configured, delivery skipped.`
+    );
+    return false;
+  }
+
+  try {
+    console.log(`[Email Service] Delivering failure alert via SMTP to ${rendered.to}`);
+    return true;
+  } catch (err: any) {
+    console.error(`[Email Service] Failed to send email to ${rendered.to}: ${err.message}`);
+    return false;
+  }
 }

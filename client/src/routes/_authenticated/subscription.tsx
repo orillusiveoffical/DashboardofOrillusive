@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { CreditCard, CheckCircle2, Layers, Clock, FileText, Printer, ShieldCheck } from 'lucide-react';
+import { CreditCard, CheckCircle2, Layers, Clock, FileText, Printer, ShieldCheck, ExternalLink } from 'lucide-react';
 import { subscriptionService, PlanDetail, Invoice } from '@/services/subscription.service';
 import { Modal } from '@/components/ui/Form';
 import { cn } from '@/lib/utils';
@@ -19,13 +19,7 @@ function SubscriptionBillingPage() {
   const [paymentSuccess, setPaymentSuccess] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string>('');
   const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null);
-
-  // Payment Form State
-  const [cardHolder, setCardHolder] = useState('Tariq Mahmood');
-  const [cardNumber, setCardNumber] = useState('4242 •••• •••• 4242');
-  const [expMonth, setExpMonth] = useState('12');
-  const [expYear, setExpYear] = useState('2028');
-  const [cvc, setCvc] = useState('888');
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   const { data: subData, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['subscription'],
@@ -61,7 +55,7 @@ function SubscriptionBillingPage() {
       setSelectedPlanId(null);
     },
     onError: (err: any) => {
-      setPaymentError(err.message || 'Payment processing failed. Please verify payment status.');
+      setPaymentError(err.message || 'Payment processing failed or not yet confirmed by Safepay.');
     },
   });
 
@@ -79,8 +73,8 @@ function SubscriptionBillingPage() {
           trackerToken: trackerToken || undefined,
         });
         window.history.replaceState({}, document.title, window.location.pathname);
-      } else if (paymentStatus === 'cancelled') {
-        setPaymentError('Payment was cancelled on Safepay checkout.');
+      } else if (paymentStatus === 'cancelled' || paymentStatus === 'failed') {
+        setPaymentError('Payment was cancelled or declined on Safepay. Your subscription was not activated.');
         window.history.replaceState({}, document.title, window.location.pathname);
       }
     }
@@ -97,28 +91,11 @@ function SubscriptionBillingPage() {
     sessionMutation.mutate(planId);
   };
 
-  const handlePayAndSubscribe = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!checkoutSession) return;
-    setPaymentError('');
-
-    // If Safepay checkout URL is generated, redirect to Safepay hosted portal or verify
-    if (checkoutSession.safepayCheckoutUrl && !checkoutSession.safepayCheckoutUrl.includes('track_')) {
-      window.location.href = checkoutSession.safepayCheckoutUrl;
-      return;
-    }
-
-    verifyPaymentMutation.mutate({
-      sessionId: checkoutSession.sessionId,
-      orderId: checkoutSession.orderId || checkoutSession.sessionId,
-      planId: checkoutSession.planId,
-      trackerToken: checkoutSession.trackerToken,
-      cardHolder,
-      cardNumber,
-      expMonth,
-      expYear,
-      cvc,
-    });
+  const handleProceedToSafepay = () => {
+    if (!checkoutSession || !checkoutSession.safepayCheckoutUrl) return;
+    setIsRedirecting(true);
+    // Immediate browser redirection to Safepay hosted checkout
+    window.location.href = checkoutSession.safepayCheckoutUrl;
   };
 
   return (
@@ -320,13 +297,14 @@ function SubscriptionBillingPage() {
         </>
       ) : null}
 
-      {/* Light Luxury Payment Gateway Checkout Modal */}
+      {/* Safepay Payment Redirection Modal */}
       {checkoutSession && (
         <Modal
           open={!!checkoutSession}
           onClose={() => {
             setCheckoutSession(null);
             setSelectedPlanId(null);
+            setIsRedirecting(false);
           }}
           title="Payment Checkout Gateway"
           size="lg"
@@ -362,93 +340,49 @@ function SubscriptionBillingPage() {
               </div>
             )}
 
-            {/* Credit Card Input Form */}
-            <form onSubmit={handlePayAndSubscribe} className="space-y-4 text-xs">
-              <div>
-                <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">Cardholder Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={cardHolder}
-                  onChange={(e) => setCardHolder(e.target.value)}
-                  className="w-full h-11 bg-white border border-[#D2C4B4] rounded-xl px-4 text-sm text-[#0F172A] font-semibold outline-none focus:ring-2 focus:ring-[#81A6C6]"
-                />
+            {/* Safepay Redirect Information Box */}
+            <div className="rounded-2xl bg-blue-50/50 dark:bg-slate-800/40 border border-blue-200/60 dark:border-slate-700 p-4 space-y-2 text-xs text-[var(--text-secondary)]">
+              <div className="font-bold text-[var(--text-primary)] flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" /> Secure Hosted Safepay Checkout
               </div>
+              <p className="leading-relaxed text-[11px]">
+                You will be redirected to Safepay's official PCI-DSS compliant checkout portal to complete your PKR payment securely using Debit/Credit Card, Bank Transfer, or Mobile Wallets.
+              </p>
+            </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">Credit / Debit Card Number *</label>
-                <input
-                  type="text"
-                  required
-                  value={cardNumber}
-                  onChange={(e) => setCardNumber(e.target.value)}
-                  className="w-full h-11 bg-white border border-[#D2C4B4] rounded-xl px-4 text-sm text-[#0F172A] font-mono outline-none focus:ring-2 focus:ring-[#81A6C6]"
-                />
-              </div>
+            <div className="flex items-center justify-between text-[10px] text-slate-500 font-medium pt-1">
+              <span>🔒 256-bit SSL Encrypted Payment Gateway</span>
+              <span>Powered by Safepay Payments (PKR)</span>
+            </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">Exp Month</label>
-                  <input
-                    type="text"
-                    required
-                    maxLength={2}
-                    value={expMonth}
-                    onChange={(e) => setExpMonth(e.target.value)}
-                    className="w-full h-11 bg-white border border-[#D2C4B4] rounded-xl px-3 text-center text-sm text-[#0F172A] font-mono outline-none focus:ring-2 focus:ring-[#81A6C6]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">Exp Year</label>
-                  <input
-                    type="text"
-                    required
-                    maxLength={4}
-                    value={expYear}
-                    onChange={(e) => setExpYear(e.target.value)}
-                    className="w-full h-11 bg-white border border-[#D2C4B4] rounded-xl px-3 text-center text-sm text-[#0F172A] font-mono outline-none focus:ring-2 focus:ring-[#81A6C6]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">CVC Code</label>
-                  <input
-                    type="password"
-                    required
-                    maxLength={4}
-                    value={cvc}
-                    onChange={(e) => setCvc(e.target.value)}
-                    className="w-full h-11 bg-white border border-[#D2C4B4] rounded-xl px-3 text-center text-sm text-[#0F172A] font-mono outline-none focus:ring-2 focus:ring-[#81A6C6]"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between text-[10px] text-slate-500 font-medium pt-1">
-                <span>🔒 256-bit SSL Encrypted Payment Gateway</span>
-                <span>Powered by Safepay Payments (PKR)</span>
-              </div>
-
-              <div className="pt-3 flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCheckoutSession(null);
-                    setSelectedPlanId(null);
-                  }}
-                  className="flex-1 h-12 rounded-xl bg-[#FAF5EF] text-[#0F172A] border border-[#D2C4B4] font-semibold text-sm hover:bg-[#AACDDC]/30 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={verifyPaymentMutation.isPending}
-                  className="flex-2 h-12 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-sm transition disabled:opacity-50 active:scale-[0.98]"
-                >
-                  {verifyPaymentMutation.isPending
-                    ? 'Verifying Payment...'
-                    : `Pay ${checkoutSession.totalPkr.toLocaleString()} PKR & Subscribe`}
-                </button>
-              </div>
-            </form>
+            <div className="pt-3 flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setCheckoutSession(null);
+                  setSelectedPlanId(null);
+                  setIsRedirecting(false);
+                }}
+                className="flex-1 h-12 rounded-xl bg-[#FAF5EF] text-[#0F172A] border border-[#D2C4B4] font-semibold text-sm hover:bg-[#AACDDC]/30 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleProceedToSafepay}
+                disabled={isRedirecting}
+                className="flex-2 h-12 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-sm transition disabled:opacity-50 active:scale-[0.98] flex items-center justify-center gap-2"
+              >
+                {isRedirecting ? (
+                  'Redirecting to Safepay...'
+                ) : (
+                  <>
+                    <span>Pay {checkoutSession.totalPkr.toLocaleString()} PKR on Safepay</span>
+                    <ExternalLink className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </Modal>
       )}

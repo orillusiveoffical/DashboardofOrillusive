@@ -13,7 +13,7 @@ import { config } from '../config/index.js';
 
 async function runSafepayTestSuite() {
   console.log('\n========================================================================');
-  console.log(' ORILLUSIVE HMS — SAFEPAY PRODUCTION PAYMENT & INVOICE SUITE');
+  console.log(' ORILLUSIVE HMS — SAFEPAY PRODUCTION & STRICT VERIFICATION SUITE');
   console.log('========================================================================\n');
 
   const { models: saasModels } = await connectSaasDb();
@@ -35,8 +35,8 @@ async function runSafepayTestSuite() {
   }
   console.log(`✓ Plan Prices Verified: BASIC = 5,000 PKR, MEDIUM = 12,000 PKR, PREMIUM = 15,000 PKR`);
 
-  // ─── Test 2: Safepay Tracker Creation & Checkout URL Format ────────────────
-  console.log('\n[Test 2] Testing Safepay Tracker Session Creation...');
+  // ─── Test 2: Safepay Tracker Creation & Hosted Checkout URL Format ────────
+  console.log('\n[Test 2] Testing Safepay Tracker Session Creation & Hosted URL Format...');
   const testOrderId = `ord_test_${Date.now()}`;
   const totalTax = Math.round(basicPlan.pricePkr * 0.16);
   const totalPkr = basicPlan.pricePkr + totalTax;
@@ -85,11 +85,10 @@ async function runSafepayTestSuite() {
   console.log('✓ Forged/Tampered Webhook Signature Correctly Rejected (400 Bad Request)');
   (config.safepay as any).webhookSecret = originalSecret;
 
-  // ─── Test 4: End-to-End Payment Order, Subscription & Invoice Generation ───
+  // ─── Test 4: End-to-End Verified Payment Order, Subscription & Invoice ──────
   console.log('\n[Test 4] Testing Payment Verification, 30-Day Subscription & Invoice Generation...');
   const testTenantId = `tnt_safepay_test_${Date.now()}`;
   const testUserId = `usr_safepay_test_${Date.now()}`;
-
   const testEmail = `serena_owner_${Date.now()}@hotel.com`;
 
   // Create demo tenant
@@ -173,7 +172,7 @@ async function runSafepayTestSuite() {
     tenantId: testTenantId,
     userId: testUserId,
     customerName: 'Tariq Mahmood',
-    customerEmail: 'serena_owner@hotel.com',
+    customerEmail: testEmail,
     hotelName: 'Serena Pearl Grand',
     planId: 'MEDIUM',
     planName: 'Medium Plan',
@@ -193,10 +192,10 @@ async function runSafepayTestSuite() {
   order.invoiceId = invoice.invoiceId;
   await order.save();
 
-  // Trigger Success Email
+  // Trigger Success Email (Transparent Logging when SMTP unconfigured)
   await sendPaymentSuccessEmail({
     customerName: 'Tariq Mahmood',
-    customerEmail: 'serena_owner@hotel.com',
+    customerEmail: testEmail,
     planName: 'Medium Plan',
     amount: 13920,
     currency: 'PKR',
@@ -291,7 +290,7 @@ async function runSafepayTestSuite() {
   console.log('✓ Failed payment safety confirmed: Tenant remains DEMO/TRIAL, no active subscription, no invoice created.');
 
   console.log('\n========================================================================');
-  console.log(' 🎉 ALL SAFEPAY PRODUCTION INTEGRATION & INVOICE TESTS PASSED (100%)!');
+  console.log(' 🎉 ALL SAFEPAY PRODUCTION & STRICT VERIFICATION TESTS PASSED (100%)!');
   console.log('========================================================================\n');
 }
 

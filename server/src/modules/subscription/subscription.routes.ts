@@ -461,7 +461,12 @@ router.post(
         return;
       }
 
-      const targetPlanId = (planId || order?.selectedPlan || req.body.plan || '').toUpperCase();
+      if (!order) {
+        res.status(404).json({ success: false, error: 'Payment order record not found.' });
+        return;
+      }
+
+      const targetPlanId = (planId || order.selectedPlan || req.body.plan || '').toUpperCase();
       const plan = await saasModels.Plan.findOne({ planId: targetPlanId });
 
       if (!plan) {
@@ -469,45 +474,63 @@ router.post(
         return;
       }
 
-      // Check tracker status with Safepay API if configured
-      if (trackerToken || order?.providerReference) {
-        const tokenToCheck = trackerToken || order?.providerReference;
+      const userDoc = await saasModels.SaasUser.findOne({ userId: req.user!.userId });
+      const customerName = userDoc ? `${userDoc.firstName} ${userDoc.lastName}` : req.tenant!.name;
+
+      // Check tracker status with Safepay API
+      let isPaymentConfirmed = false;
+      const tokenToCheck = trackerToken || order.providerReference;
+
+      if (order.paymentStatus === 'PAID' || order.paymentStatus === 'VERIFIED') {
+        isPaymentConfirmed = true;
+      } else if (tokenToCheck) {
         const sfStatus = await fetchSafepayTrackerStatus(tokenToCheck);
         if (sfStatus.success && (sfStatus.status === 'PAID' || sfStatus.state === 'TRACKER_ENDED')) {
-          if (order) {
-            order.paymentStatus = 'PAID';
-            await order.save();
-          }
+          isPaymentConfirmed = true;
+          order.paymentStatus = 'PAID';
+          order.verifiedAt = new Date();
+          await order.save();
+        } else if (
+          sfStatus.success &&
+          (sfStatus.state === 'TRACKER_CANCELLED' ||
+            sfStatus.state === 'TRACKER_FAILED' ||
+            sfStatus.status === 'FAILED' ||
+            sfStatus.status === 'DECLINED')
+        ) {
+          order.paymentStatus = 'DECLINED';
+          await order.save();
+          const clientBase = (config.clientUrl || 'https://dashboard.orillusive.com').replace(/\/+$/, '');
+          await sendPaymentFailedEmail({
+            customerName,
+            customerEmail: req.user!.email,
+            planName: plan.name,
+            amount: order.amount,
+            currency: 'PKR',
+            paymentDate: new Date(),
+            referenceId: order.orderId,
+            retryUrl: `${clientBase}/subscription`,
+          }).catch(() => {});
+
+          res.status(400).json({
+            success: false,
+            error: 'Safepay payment was declined or cancelled. Subscription was not activated.',
+          });
+          return;
         }
       }
 
-      // If order is not found yet, create verified state
-      if (!order) {
-        const newOrderId = targetOrderId || `ord_${req.tenant!.tenantId}_${Date.now()}`;
-        const tax = Math.round(plan.pricePkr * 0.16);
-        order = await saasModels.PaymentOrder.create({
-          orderId: newOrderId,
-          paymentId: `pay_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-          tenantId: req.tenant!.tenantId,
-          userId: req.user!.userId,
-          email: req.user!.email,
-          normalizedEmail: req.user!.email.toLowerCase().trim(),
-          selectedPlan: plan.planId as any,
-          amount: plan.pricePkr + tax,
-          currency: 'PKR',
-          paymentStatus: 'PAID',
-          provider: 'safepay',
-          providerReference: trackerToken || newOrderId,
-          providerTransactionId: trackerToken || newOrderId,
-          verifiedAt: new Date(),
+      if (!isPaymentConfirmed) {
+        res.status(400).json({
+          success: false,
+          error: 'Safepay has not confirmed this payment as PAID. Subscription cannot be activated without verified payment.',
         });
-      } else if (order.paymentStatus !== 'PAID' && order.paymentStatus !== 'VERIFIED') {
+        return;
+      }
+
+      // If verified and order existed
+      if (order && order.paymentStatus !== 'PAID') {
         order.paymentStatus = 'PAID';
         order.verifiedAt = new Date();
-        if (trackerToken) {
-          order.providerReference = trackerToken;
-          order.providerTransactionId = trackerToken;
-        }
         await order.save();
       }
 
